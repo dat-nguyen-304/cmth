@@ -23,3 +23,17 @@ export function buildEnemyTeam(stage: number): Recruit[] {
 export function battleSeed(stage: number): number {
   return stage * 1000 + 7;
 }
+
+const AREAS = [
+  'Tân Thủ Thôn',
+  'Tử Trúc Lâm',
+  'Hắc Phong Trại',
+  'Lạc Nhật Cốc',
+  'U Minh Cốc',
+  'Tuyết Sơn Lĩnh',
+];
+
+/** Flavor name for the hunting area of a given stage (changes every 5 stages). */
+export function areaName(stage: number): string {
+  return AREAS[Math.floor((stage - 1) / 5) % AREAS.length]!;
+}
