@@ -1,0 +1,19 @@
+{
+  "name": "chuong-mon-ti-hon",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Chưởng Môn Tí Hon — web chibi wuxia auto-battler (Phase 1)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace=@cmth/sim",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "npm run dev --workspace=@cmth/client",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
