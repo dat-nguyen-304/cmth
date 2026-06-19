@@ -1,11 +1,14 @@
 import { ALL_CHARACTER_IDS, type Recruit } from '@cmth/sim';
-import type { PlayerProgress } from './progress';
+import { sanitizeTeam, TEAM_SIZE, type PlayerProgress } from './progress';
 
-/** Your team for Phase 1: every owned character, at its current level (max 6). */
+/**
+ * The recruits that take the field, in the player's chosen order (index 0 = front).
+ * Falls back to the first owned characters if no valid team is set.
+ */
 export function buildPlayerTeam(p: PlayerProgress): Recruit[] {
-  return Object.entries(p.chars)
-    .slice(0, 6)
-    .map(([defId, cp]) => ({ defId, level: cp.level }));
+  let ids = sanitizeTeam(p.team ?? [], p.chars);
+  if (ids.length === 0) ids = Object.keys(p.chars).slice(0, TEAM_SIZE);
+  return ids.map((defId) => ({ defId, level: p.chars[defId]!.level }));
 }
 
 /** Enemy team scales with stage: more units and higher level as you climb. */

@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Text } from 'pixi.js';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  MELEE_RANGE_MAX,
   SECTS,
   type BattleEvent,
   type Combatant,
@@ -10,6 +11,9 @@ import { BattleRunner } from './BattleRunner';
 
 const UNIT = 38;
 const DEATH_FADE = 0.6; // seconds a corpse takes to fade out and vanish
+const LUNGE_T = 0.12; // seconds a melee lunge lasts
+const LUNGE_DIST = 14; // how far (px) a melee unit jabs toward its target
+const PROJECTILE_SPEED = 920; // px/s a ranged shot travels
 
 interface UnitView {
   container: Container;
@@ -18,12 +22,27 @@ interface UnitView {
   flash: number; // seconds of hit flash remaining
   pulse: number; // seconds of ult pulse remaining
   deathFade: number; // seconds left in the death fade-out (0 once gone)
+  lunge: number; // seconds of melee-jab offset remaining
+  lungeDir: 1 | -1; // direction of the current jab
 }
 
 interface Fx {
   g: Graphics;
   life: number;
   max: number;
+}
+
+/** A ranged shot in flight: travels from spawn point to a fixed target point. */
+interface Projectile {
+  g: Graphics;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  life: number; // seconds left until impact
+  max: number;
+  color: number;
+  targetUid: number; // who flashes on impact
 }
 
 /** Darken an RGB color by factor f (0..1). */
@@ -51,6 +70,7 @@ export class PixiBattle {
   private readonly fxLayer = new Container();
   private readonly units = new Map<number, UnitView>();
   private fx: Fx[] = [];
+  private projectiles: Projectile[] = [];
   private destroyed = false;
 
   async init(
@@ -124,14 +144,33 @@ export class PixiBattle {
 
     container.addChild(body, hp, label);
     this.world.addChild(container);
-    return { container, body, hp, flash: 0, pulse: 0, deathFade: DEATH_FADE };
+    return { container, body, hp, flash: 0, pulse: 0, deathFade: DEATH_FADE, lunge: 0, lungeDir: 1 };
   }
 
   private applyEvents(runner: BattleRunner, events: BattleEvent[]): void {
     for (const e of events) {
       if (e.type === 'attack') {
-        const v = this.units.get(e.target);
-        if (v) v.flash = 0.12;
+        const src = runner.state.combatants.find((x) => x.uid === e.source);
+        const tgt = runner.state.combatants.find((x) => x.uid === e.target);
+        if (!tgt) continue;
+        const color = src ? SECTS[src.sect].color : 0xffffff;
+        const ranged = src ? src.attackRange > MELEE_RANGE_MAX : false;
+        if (ranged && src) {
+          // Fire a visible shot; the hit flash + impact land when it arrives.
+          this.spawnProjectile(src.pos, tgt.pos, color, e.target);
+        } else {
+          // Melee: jab toward the target, flash it now, spark on contact.
+          if (src) {
+            const sv = this.units.get(src.uid);
+            if (sv) {
+              sv.lunge = LUNGE_T;
+              sv.lungeDir = src.facing;
+            }
+          }
+          const tv = this.units.get(e.target);
+          if (tv) tv.flash = 0.12;
+          this.spawnRing(tgt.pos.x, tgt.pos.y, color, 0.22, 16);
+        }
       } else if (e.type === 'ult') {
         const v = this.units.get(e.source);
         if (v) v.pulse = 0.3;
@@ -154,6 +193,24 @@ export class PixiBattle {
     g.scale.set(0.3);
     this.fxLayer.addChild(g);
     this.fx.push({ g, life, max: life });
+  }
+
+  private spawnProjectile(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    color: number,
+    targetUid: number,
+  ): void {
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const life = Math.min(0.35, Math.max(0.05, dist / PROJECTILE_SPEED));
+    const g = new Graphics()
+      .circle(0, 0, 6)
+      .fill({ color })
+      .stroke({ width: 2, color: 0xffffff, alpha: 0.6 });
+    g.x = from.x;
+    g.y = from.y;
+    this.fxLayer.addChild(g);
+    this.projectiles.push({ g, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, life, max: life, color, targetUid });
   }
 
   private renderFrame(runner: BattleRunner, dt: number): void {
@@ -185,6 +242,12 @@ export class PixiBattle {
       v.body.tint = v.flash > 0 ? 0xff8a8a : 0xffffff;
       if (v.flash > 0) v.flash = Math.max(0, v.flash - dt);
 
+      // Melee jab: pop toward the target, then ease back to the resting position.
+      if (v.lunge > 0) {
+        v.lunge = Math.max(0, v.lunge - dt);
+        v.container.x = p.x + v.lungeDir * LUNGE_DIST * (v.lunge / LUNGE_T);
+      }
+
       if (v.pulse > 0) {
         v.pulse = Math.max(0, v.pulse - dt);
         v.container.scale.set(1 + 0.4 * (v.pulse / 0.3));
@@ -192,6 +255,22 @@ export class PixiBattle {
         v.container.scale.set(1);
       }
     }
+
+    // Ranged shots in flight: move toward the target; flash + spark on impact.
+    this.projectiles = this.projectiles.filter((p) => {
+      p.life -= dt;
+      const t = 1 - Math.max(0, p.life) / p.max;
+      p.g.x = p.fromX + (p.toX - p.fromX) * t;
+      p.g.y = p.fromY + (p.toY - p.fromY) * t;
+      if (p.life <= 0) {
+        const tv = this.units.get(p.targetUid);
+        if (tv) tv.flash = 0.12;
+        this.spawnRing(p.toX, p.toY, p.color, 0.22, 14);
+        p.g.destroy();
+        return false;
+      }
+      return true;
+    });
 
     // Transient ring effects.
     this.fx = this.fx.filter((f) => {

@@ -28,7 +28,8 @@ export interface DisplayStats {
   hp: number;
   atk: number;
   def: number;
-  spd: number;
+  /** Attacks per second (derived from attackInterval; higher = faster "hit speed"). */
+  atkSpeed: number;
   ranged: boolean;
 }
 
@@ -40,7 +41,7 @@ export function heroStats(defId: string, level: number): DisplayStats {
     hp: Math.round(b.maxHp * f),
     atk: Math.round(b.atk * f),
     def: Math.round(b.def * f),
-    spd: Math.round(b.spd),
+    atkSpeed: 1 / b.attackInterval,
     ranged: b.attackRange > MELEE_RANGE_MAX,
   };
 }

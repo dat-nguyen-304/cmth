@@ -29,21 +29,21 @@ export const CHARACTERS: Record<string, CharacterDef> = {
     name: 'Thiết La Hán',
     sect: 'thieu_lam',
     rarity: 'default',
-    base: stats({ maxHp: 1400, atk: 70, def: 60, spd: 95, attackRange: 70, attackInterval: 1.3 }),
+    base: stats({ maxHp: 1400, atk: 70, def: 60, attackRange: 70, attackInterval: 1.3 }),
   },
   ly_tuu_cuong: {
     id: 'ly_tuu_cuong',
     name: 'Lý Tửu Cuồng',
     sect: 'cai_bang',
     rarity: 'default',
-    base: stats({ maxHp: 820, atk: 135, def: 28, spd: 120, attackRange: 80, attackInterval: 0.85 }),
+    base: stats({ maxHp: 820, atk: 135, def: 28, attackRange: 80, attackInterval: 0.85 }),
   },
   cau_nhi: {
     id: 'cau_nhi',
     name: 'Cẩu Nhi',
     sect: 'cai_bang',
     rarity: 'default',
-    base: stats({ maxHp: 860, atk: 120, def: 30, spd: 125, attackRange: 75, attackInterval: 0.9 }),
+    base: stats({ maxHp: 860, atk: 120, def: 30, attackRange: 75, attackInterval: 0.9 }),
   },
   tieu_ngoc: {
     id: 'tieu_ngoc',
@@ -51,14 +51,14 @@ export const CHARACTERS: Record<string, CharacterDef> = {
     sect: 'nga_mi',
     rarity: 'default',
     // Ranged support: stays at the back, heals + pokes from afar.
-    base: stats({ maxHp: 760, atk: 80, def: 30, spd: 110, attackRange: 260, attackInterval: 1.1 }),
+    base: stats({ maxHp: 760, atk: 80, def: 30, attackRange: 260, attackInterval: 1.1 }),
   },
   thanh_van: {
     id: 'thanh_van',
     name: 'Thanh Vân',
     sect: 'vo_dang',
     rarity: 'default',
-    base: stats({ maxHp: 980, atk: 90, def: 42, spd: 108, attackRange: 90, attackInterval: 1.05 }),
+    base: stats({ maxHp: 980, atk: 90, def: 42, attackRange: 90, attackInterval: 1.05 }),
   },
   huyet_anh: {
     id: 'huyet_anh',
@@ -66,7 +66,7 @@ export const CHARACTERS: Record<string, CharacterDef> = {
     sect: 'ma_giao',
     rarity: 'default',
     // Ranged dark caster: hangs back behind the melee and throws damage from distance.
-    base: stats({ maxHp: 760, atk: 120, def: 28, spd: 110, attackRange: 300, attackInterval: 1.0 }),
+    base: stats({ maxHp: 760, atk: 120, def: 28, attackRange: 300, attackInterval: 1.0 }),
   },
 };
 

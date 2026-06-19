@@ -38,6 +38,11 @@ function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
 }
 
+// Persist the avatar across mounts so returning from a battle leaves you where you
+// were standing (e.g. by the battle gate) instead of teleporting to the map start.
+let savedPos = { x: 240, y: 82 };
+let savedFacing: 1 | -1 = 1;
+
 export function HubMap({
   leadColor,
   battleLabel,
@@ -50,9 +55,9 @@ export function HubMap({
   const outerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
-  const pos = useRef({ x: 240, y: 82 });
+  const pos = useRef({ ...savedPos });
   const target = useRef<{ x: number; y: number } | null>(null);
-  const facing = useRef(1);
+  const facing = useRef<1 | -1>(savedFacing);
   const camera = useRef(0);
   const nearRef = useRef<Npc | null>(null);
   const [near, setNear] = useState<Npc | null>(null);
@@ -85,6 +90,10 @@ export function HubMap({
           setMarker(null);
         }
       }
+
+      // Remember where we are so a remount (after battle) restores this spot.
+      savedPos = { x: pos.current.x, y: pos.current.y };
+      savedFacing = facing.current;
 
       // Camera follows the avatar, clamped to world bounds.
       const vw = outerRef.current?.clientWidth ?? 0;
@@ -145,7 +154,9 @@ export function HubMap({
         {/* NPCs */}
         {NPCS.map((npc) => {
           const active = near?.id === npc.id;
-          const label = npc.id === 'battle' ? battleLabel : npc.label;
+          const isBattle = npc.id === 'battle';
+          const label = isBattle ? battleLabel : npc.label;
+          const box = isBattle ? 'clamp(64px,4.8vw,96px)' : 'clamp(56px,4vw,83px)';
           return (
             <button
               key={npc.id}
@@ -159,13 +170,17 @@ export function HubMap({
               className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
               style={{ left: `${npc.x}px`, top: `${npc.y}%` }}
             >
-              <span className={`mb-1 whitespace-nowrap rounded-full bg-black/50 px-2 text-[11px] ${active ? 'text-gold' : 'text-white/70'}`}>
+              <span
+                className={`mb-1 whitespace-nowrap rounded-full bg-black/50 px-2 ${active ? 'text-gold' : 'text-white/70'}`}
+                style={{ fontSize: 'clamp(11px,0.72vw,14px)' }}
+              >
                 {label}
               </span>
               <span
                 className={`grid place-items-center rounded-2xl border-2 bg-panel transition ${
-                  npc.id === 'battle' ? 'h-16 w-16 text-4xl' : 'h-14 w-14 text-3xl'
-                } ${active ? 'border-gold shadow-[0_0_16px] shadow-gold' : npc.id === 'battle' ? 'border-gold/60' : 'border-white/15'}`}
+                  active ? 'border-gold shadow-[0_0_16px] shadow-gold' : isBattle ? 'border-gold/60' : 'border-white/15'
+                }`}
+                style={{ width: box, height: box, fontSize: isBattle ? 'clamp(36px,2.7vw,54px)' : 'clamp(30px,2.4vw,48px)' }}
               >
                 {npc.emoji}
               </span>
@@ -182,9 +197,9 @@ export function HubMap({
         )}
 
         {/* Avatar */}
-        <div ref={avatarRef} className="pointer-events-none absolute z-10" style={{ left: 240, top: '82%', transform: 'translate(-50%,-100%)' }}>
-          <div className="h-12 w-9 rounded-md border-2 border-white/30 shadow-lg" style={{ background: leadColor }} />
-          <div className="mx-auto mt-0.5 h-1.5 w-7 rounded-full bg-black/40 blur-[1px]" />
+        <div ref={avatarRef} className="pointer-events-none absolute z-10" style={{ left: savedPos.x, top: `${savedPos.y}%`, transform: `translate(-50%,-100%) scaleX(${savedFacing})` }}>
+          <div className="rounded-md border-2 border-white/30 shadow-lg" style={{ background: leadColor, width: 'clamp(36px,2.4vw,48px)', height: 'clamp(48px,3.2vw,64px)' }} />
+          <div className="mx-auto mt-0.5 h-1.5 rounded-full bg-black/40 blur-[1px]" style={{ width: 'clamp(28px,1.8vw,37px)' }} />
         </div>
       </div>
 
@@ -195,7 +210,8 @@ export function HubMap({
             e.stopPropagation();
             onInteract(near.id);
           }}
-          className="absolute left-1/2 top-[50%] -translate-x-1/2 animate-bounce rounded-full bg-gold px-4 py-1.5 text-sm font-bold text-[#2a1c00] shadow-lg"
+          className="absolute left-1/2 top-[50%] -translate-x-1/2 animate-bounce rounded-full bg-gold px-4 py-1.5 font-bold text-[#2a1c00] shadow-lg"
+          style={{ fontSize: 'clamp(14px,0.96vw,18px)' }}
         >
           {near.id === 'battle' ? '⚔️ Bấm để Đánh quái' : `Bấm để vào ${near.label}`}
         </button>
