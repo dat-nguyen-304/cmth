@@ -1,4 +1,4 @@
-import { ALL_CHARACTER_IDS } from '@cmth/sim';
+import { PLAYABLE_CHARACTER_IDS } from '@cmth/sim';
 
 /**
  * Phase 1 progression — stored locally (localStorage). This is intentionally
@@ -65,7 +65,7 @@ export function playerExpToNext(level: number): number {
 
 export function defaultProgress(now: number = Date.now()): PlayerProgress {
   const chars: Record<string, CharProgress> = {};
-  for (const id of ALL_CHARACTER_IDS) chars[id] = { level: 1, exp: 0 };
+  for (const id of PLAYABLE_CHARACTER_IDS) chars[id] = { level: 1, exp: 0 };
   return {
     gold: 0,
     stage: 1,
@@ -74,7 +74,7 @@ export function defaultProgress(now: number = Date.now()): PlayerProgress {
     stamina: STAMINA_MAX,
     staminaAt: now,
     chars,
-    team: ALL_CHARACTER_IDS.slice(0, TEAM_SIZE),
+    team: PLAYABLE_CHARACTER_IDS.slice(0, TEAM_SIZE),
   };
 }
 

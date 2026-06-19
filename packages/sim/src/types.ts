@@ -21,6 +21,8 @@ export interface CharacterDef {
   sect: SectId;
   rarity: Rarity;
   base: BaseStats;
+  /** Enemy-only mob: never owned by the player, used to populate PvE encounters. */
+  enemy?: boolean;
 }
 
 /** A character entering a battle, at a given level. */

@@ -6,7 +6,9 @@ import {
   SECTS,
   type BattleEvent,
   type Combatant,
+  type SectId,
 } from '@cmth/sim';
+import { SECT_ULT } from '../state/heroInfo';
 import { BattleRunner } from './BattleRunner';
 
 const UNIT = 38;
@@ -14,6 +16,8 @@ const DEATH_FADE = 0.6; // seconds a corpse takes to fade out and vanish
 const LUNGE_T = 0.12; // seconds a melee lunge lasts
 const LUNGE_DIST = 14; // how far (px) a melee unit jabs toward its target
 const PROJECTILE_SPEED = 920; // px/s a ranged shot travels
+const ULT_FOCUS_T = 1.0; // seconds the ult spotlight (dim others + name) lasts
+const ULT_VEIL_PEAK = 0.62; // max darkness of the spotlight veil
 
 interface UnitView {
   container: Container;
@@ -67,10 +71,16 @@ function hpColor(frac: number): number {
 export class PixiBattle {
   readonly app = new Application();
   private readonly world = new Container();
+  private readonly veil = new Graphics(); // dims the field during an ult
+  private readonly spotlightLayer = new Container(); // the caster, lifted above the veil
   private readonly fxLayer = new Container();
+  private readonly nameLayer = new Container(); // ult name text, on top
   private readonly units = new Map<number, UnitView>();
   private fx: Fx[] = [];
   private projectiles: Projectile[] = [];
+  /** Active ult spotlight, or null. */
+  private ult: { uid: number; life: number; max: number; nameText: Text } | null = null;
+  private liftedUid: number | null = null; // caster currently reparented into spotlightLayer
   private destroyed = false;
 
   async init(
@@ -91,8 +101,14 @@ export class PixiBattle {
 
     parent.appendChild(this.app.canvas);
     this.drawFloor();
+    // Layer order (bottom→top): floor, units, veil, spotlit caster, fx, ult name.
+    this.veil.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT).fill({ color: 0x000000 });
+    this.veil.alpha = 0;
     this.app.stage.addChild(this.world);
+    this.app.stage.addChild(this.veil);
+    this.app.stage.addChild(this.spotlightLayer);
     this.app.stage.addChild(this.fxLayer);
+    this.app.stage.addChild(this.nameLayer);
 
     for (const c of runner.state.combatants) this.units.set(c.uid, this.makeUnit(c));
 
@@ -176,6 +192,7 @@ export class PixiBattle {
         if (v) v.pulse = 0.3;
         const c = runner.state.combatants.find((x) => x.uid === e.source);
         if (c) this.spawnRing(c.pos.x, c.pos.y, SECTS[e.sect].color, 0.55, 110);
+        this.focusUlt(e.source, e.sect);
       } else if (e.type === 'heal' && e.amount > 0) {
         const c = runner.state.combatants.find((x) => x.uid === e.target);
         if (c) this.spawnRing(c.pos.x, c.pos.y, 0x66ff99, 0.45, 60);
@@ -211,6 +228,47 @@ export class PixiBattle {
     g.y = from.y;
     this.fxLayer.addChild(g);
     this.projectiles.push({ g, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, life, max: life, color, targetUid });
+  }
+
+  /**
+   * Spotlight the ult: dim the whole field (veil), lift the caster above it so it
+   * stays lit, and show the move's name big above its head. A new ult replaces any
+   * current spotlight.
+   */
+  private focusUlt(uid: number, sect: SectId): void {
+    this.endUltFocus();
+    const v = this.units.get(uid);
+    if (!v) return;
+    this.spotlightLayer.addChild(v.container); // moves it out of the (dimmed) world
+    this.liftedUid = uid;
+
+    const text = new Text({
+      text: SECT_ULT[sect].name,
+      style: {
+        fontFamily: 'sans-serif',
+        fontSize: 34,
+        fontWeight: '900',
+        fill: SECTS[sect].color,
+        stroke: { color: 0x000000, width: 5 },
+        align: 'center',
+      },
+    });
+    text.anchor.set(0.5, 1);
+    this.nameLayer.addChild(text);
+    this.ult = { uid, life: ULT_FOCUS_T, max: ULT_FOCUS_T, nameText: text };
+  }
+
+  private endUltFocus(): void {
+    if (this.liftedUid !== null) {
+      const v = this.units.get(this.liftedUid);
+      if (v && v.container.parent !== this.world) this.world.addChild(v.container);
+      this.liftedUid = null;
+    }
+    if (this.ult) {
+      this.ult.nameText.destroy();
+      this.ult = null;
+    }
+    this.veil.alpha = 0;
   }
 
   private renderFrame(runner: BattleRunner, dt: number): void {
@@ -254,6 +312,30 @@ export class PixiBattle {
       } else {
         v.container.scale.set(1);
       }
+    }
+
+    // Ult spotlight: ramp the veil (in fast, hold, out), keep the name above the
+    // caster, pop it in and fade it out at the end.
+    if (this.ult) {
+      this.ult.life -= dt;
+      const elapsed = this.ult.max - this.ult.life;
+      const inDur = 0.15;
+      const outDur = 0.35;
+      let a = ULT_VEIL_PEAK;
+      if (elapsed < inDur) a = ULT_VEIL_PEAK * (elapsed / inDur);
+      else if (this.ult.life < outDur) a = ULT_VEIL_PEAK * Math.max(0, this.ult.life / outDur);
+      this.veil.alpha = a;
+
+      const v = this.units.get(this.ult.uid);
+      const name = this.ult.nameText;
+      if (v) {
+        name.x = v.container.x;
+        name.y = v.container.y - 64;
+      }
+      name.scale.set(0.7 + 0.3 * Math.min(1, elapsed / 0.18));
+      name.alpha = this.ult.life < outDur ? Math.max(0, this.ult.life / outDur) : 1;
+
+      if (this.ult.life <= 0) this.endUltFocus();
     }
 
     // Ranged shots in flight: move toward the target; flash + spark on impact.
