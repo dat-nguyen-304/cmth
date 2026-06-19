@@ -22,7 +22,6 @@ const ULT_VEIL_PEAK = 0.62; // max darkness of the spotlight veil
 interface UnitView {
   container: Container;
   body: Graphics;
-  hp: Graphics;
   flash: number; // seconds of hit flash remaining
   pulse: number; // seconds of ult pulse remaining
   deathFade: number; // seconds left in the death fade-out (0 once gone)
@@ -57,11 +56,6 @@ function shade(color: number, f: number): number {
   return (Math.round(r * f) << 16) | (Math.round(g * f) << 8) | Math.round(b * f);
 }
 
-function hpColor(frac: number): number {
-  if (frac > 0.5) return 0x4caf50;
-  if (frac > 0.25) return 0xffb300;
-  return 0xe53935;
-}
 
 /**
  * Renders a BattleRunner with PixiJS. Placeholder block art for Phase 1: each
@@ -81,6 +75,7 @@ export class PixiBattle {
   /** Active ult spotlight, or null. */
   private ult: { uid: number; life: number; max: number; nameText: Text } | null = null;
   private liftedUid: number | null = null; // caster currently reparented into spotlightLayer
+  private parent: HTMLElement | null = null;
   private destroyed = false;
 
   async init(
@@ -89,8 +84,7 @@ export class PixiBattle {
     onFrame: (events: BattleEvent[]) => void,
   ): Promise<void> {
     await this.app.init({
-      width: ARENA_WIDTH,
-      height: ARENA_HEIGHT,
+      resizeTo: parent,
       background: 0x161620,
       antialias: true,
     });
@@ -100,6 +94,8 @@ export class PixiBattle {
     }
 
     parent.appendChild(this.app.canvas);
+    this.parent = parent;
+    this.rescaleWorld();
     this.drawFloor();
     // Layer order (bottom→top): floor, units, veil, spotlit caster, fx, ult name.
     this.veil.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT).fill({ color: 0x000000 });
@@ -114,6 +110,7 @@ export class PixiBattle {
 
     this.app.ticker.add((ticker) => {
       const dt = ticker.deltaMS / 1000;
+      this.rescaleWorld();
       const events = runner.update(ticker.deltaMS);
       this.applyEvents(runner, events);
       this.renderFrame(runner, dt);
@@ -130,11 +127,25 @@ export class PixiBattle {
     }
   }
 
+  /**
+   * Scale all stage layers so game coordinates (ARENA_WIDTH × ARENA_HEIGHT)
+   * map to the real canvas pixel size, filling the container completely.
+   */
+  private rescaleWorld(): void {
+    const cw = this.app.screen.width;
+    const ch = this.app.screen.height;
+    const sx = cw / ARENA_WIDTH;
+    const sy = ch / ARENA_HEIGHT;
+    for (const layer of [this.world, this.veil, this.spotlightLayer, this.fxLayer, this.nameLayer]) {
+      layer.scale.set(sx, sy);
+    }
+  }
+
   private drawFloor(): void {
     const floor = new Graphics()
       .rect(0, ARENA_HEIGHT * 0.5, ARENA_WIDTH, ARENA_HEIGHT * 0.5)
       .fill({ color: 0x1e1e2c });
-    this.app.stage.addChild(floor);
+    this.world.addChild(floor);
   }
 
   private makeUnit(c: Combatant): UnitView {
@@ -147,20 +158,9 @@ export class PixiBattle {
       .fill(fill)
       .stroke({ width: 3, color: c.side === 0 ? 0x39d3ff : 0xff5a5a, alpha: 0.9 });
 
-    const hp = new Graphics();
-
-    const label = new Text({
-      text: c.name,
-      style: { fontFamily: 'sans-serif', fontSize: 10, fill: 0xeeeeee },
-    });
-    label.anchor.set(0.5, 1);
-    // Units share one row and pack close together, so stagger labels vertically
-    // (by uid parity) to keep adjacent names from overlapping.
-    label.y = -half - 14 - (c.uid % 2) * 13;
-
-    container.addChild(body, hp, label);
+    container.addChild(body);
     this.world.addChild(container);
-    return { container, body, hp, flash: 0, pulse: 0, deathFade: DEATH_FADE, lunge: 0, lungeDir: 1 };
+    return { container, body, flash: 0, pulse: 0, deathFade: DEATH_FADE, lunge: 0, lungeDir: 1 };
   }
 
   private applyEvents(runner: BattleRunner, events: BattleEvent[]): void {
@@ -280,10 +280,7 @@ export class PixiBattle {
       v.container.x = p.x;
       v.container.y = p.y;
 
-      const frac = Math.max(0, c.hp / c.maxHp);
-      v.hp.clear();
-      v.hp.rect(-half, -half - 9, UNIT, 4).fill({ color: 0x000000, alpha: 0.6 });
-      if (frac > 0) v.hp.rect(-half, -half - 9, UNIT * frac, 4).fill(hpColor(frac));
+
 
       if (!c.alive) {
         // Fade the corpse out and shrink it, then leave it fully invisible — no

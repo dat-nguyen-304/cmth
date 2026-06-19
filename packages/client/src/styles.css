@@ -45,3 +45,40 @@ body {
 .animate-pop-in {
   animation: pop-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
+
+/* =========== Battle-specific (can't do in Tailwind) =========== */
+
+/* Pixi canvas injected imperatively — override its inline styles to fill parent */
+.arena canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Vertical text label for TA / ĐỊCH */
+.vertical-label {
+  writing-mode: vertical-lr;
+  text-orientation: upright;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  padding: 2px 0;
+}
+
+/* Ult-ready pulsing glow */
+@keyframes ult-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--color-gold), 0 0 14px rgba(242,193,78,0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--color-gold), 0 0 26px rgba(242,193,78,0.7);
+  }
+}
+.animate-ult-pulse {
+  animation: ult-pulse 1.4s ease-in-out infinite;
+}
+
