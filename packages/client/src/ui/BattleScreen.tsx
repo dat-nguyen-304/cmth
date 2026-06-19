@@ -24,20 +24,13 @@ export function BattleScreen({ playerTeam, enemyTeam, seed, onFinish }: Props) {
     const runner = new BattleRunner(playerTeam, enemyTeam, seed);
     runnerRef.current = runner;
     const pixi = new PixiBattle();
-    let finishedFlag = false;
-
-    pixi
-      .init(hostRef.current!, runner, () => {
-        forceRender();
-        if (runner.finished && !finishedFlag) finishedFlag = true;
-      })
-      .catch((err) => console.error('Pixi init failed', err));
-
+    pixi.init(hostRef.current!, runner, () => forceRender()).catch((err) =>
+      console.error('Pixi init failed', err),
+    );
     return () => pixi.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reflect the runner's terminal state into React.
   useEffect(() => {
     if (finished) return;
     const id = window.setInterval(() => {
@@ -46,7 +39,6 @@ export function BattleScreen({ playerTeam, enemyTeam, seed, onFinish }: Props) {
     return () => window.clearInterval(id);
   }, [finished]);
 
-  // After a short victory pause, hand control back.
   useEffect(() => {
     if (!finished) return;
     const id = window.setTimeout(() => onFinish(runnerRef.current?.winner ?? null), 1400);
@@ -56,43 +48,52 @@ export function BattleScreen({ playerTeam, enemyTeam, seed, onFinish }: Props) {
 
   const runner = runnerRef.current;
   const playerUnits = runner ? runner.state.combatants.filter((c) => c.side === 0) : [];
+  const won = runner?.winner === 0;
 
   return (
-    <div className="screen battle">
-      <div className="arena-wrap">
+    <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 p-4">
+      <div className="relative flex w-full justify-center">
         <div className="arena" ref={hostRef} />
         {finished && (
-          <div className={`banner ${runner?.winner === 0 ? 'win' : 'lose'}`}>
-            {runner?.winner === 0 ? 'CHIẾN THẮNG' : 'THẤT BẠI'}
+          <div
+            className={`absolute left-1/2 top-[40%] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/70 px-8 py-2.5 text-5xl font-black tracking-widest drop-shadow-lg ${
+              won ? 'text-green-400' : 'text-red-400'
+            }`}
+          >
+            {won ? 'CHIẾN THẮNG' : 'THẤT BẠI'}
           </div>
         )}
       </div>
 
-      <div className="portraits">
+      <div className="flex flex-wrap justify-center gap-2.5">
         {playerUnits.map((c) => {
           const ready = c.alive && c.energy >= ENERGY_MAX;
           return (
             <button
               key={c.uid}
-              className={`portrait ${ready ? 'ready' : ''} ${!c.alive ? 'dead' : ''}`}
-              style={{ borderColor: hex(SECTS[c.sect].color) }}
               disabled={!ready}
               onClick={() => runnerRef.current?.queueUlt(c.uid)}
               title={ready ? 'Tung chiêu cuối!' : 'Đang tích nộ'}
+              style={{ borderColor: hex(SECTS[c.sect].color) }}
+              className={`relative w-28 rounded-xl border-2 bg-panel p-2 text-left transition disabled:cursor-default ${
+                ready ? 'shadow-[0_0_0_2px_var(--color-gold),0_0_18px_var(--color-gold)] hover:-translate-y-0.5' : ''
+              } ${!c.alive ? 'opacity-40' : ''}`}
             >
-              <span className="p-name">{c.name}</span>
-              <span className="ebar">
+              <span className="mb-1.5 block truncate text-[13px] font-bold">{c.name}</span>
+              <span className="block h-2 overflow-hidden rounded bg-black/40">
                 <span
-                  className="efill"
+                  className="block h-full bg-gradient-to-r from-accent to-[#b06dff]"
                   style={{ width: `${Math.min(100, (c.energy / ENERGY_MAX) * 100)}%` }}
                 />
               </span>
-              {!c.alive && <span className="ko">✕</span>}
+              {!c.alive && (
+                <span className="absolute inset-0 grid place-items-center text-3xl text-red-400">✕</span>
+              )}
             </button>
           );
         })}
       </div>
-      <p className="hint">Bấm chân dung để tung chiêu cuối khi thanh nộ đầy.</p>
+      <p className="text-sm text-muted">Bấm chân dung để tung chiêu cuối khi thanh nộ đầy.</p>
     </div>
   );
 }
