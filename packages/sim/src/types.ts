@@ -10,9 +10,8 @@ export interface BaseStats {
   maxHp: number;
   atk: number;
   def: number;
-  spd: number; // world units per second
   attackRange: number; // world units
-  attackInterval: number; // seconds between auto-attacks
+  attackInterval: number; // seconds between auto-attacks (lower = faster = "hit speed")
 }
 
 /** Static definition of a character (roster data, sect-independent of any battle). */
@@ -51,7 +50,6 @@ export interface Combatant {
   maxHp: number;
   atk: number;
   def: number;
-  spd: number;
   attackRange: number;
   attackInterval: number;
   attackTimer: number; // seconds until next auto-attack is allowed
@@ -61,7 +59,7 @@ export interface Combatant {
 
   // transient status effects (seconds remaining + magnitude)
   slowTimer: number;
-  slowFactor: number; // multiplies speed while slowTimer > 0
+  slowFactor: number; // multiplies move speed while slowTimer > 0
   defDownTimer: number;
   defDownFactor: number; // multiplies def while defDownTimer > 0
   dotTimer: number;

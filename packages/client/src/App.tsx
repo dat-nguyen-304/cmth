@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Recruit, Side } from '@cmth/sim';
 import { HomeScreen } from './ui/HomeScreen';
+import { PrepareScreen } from './ui/PrepareScreen';
 import { BattleScreen } from './ui/BattleScreen';
 import { ResultScreen } from './ui/ResultScreen';
 import {
@@ -16,7 +17,7 @@ import {
 } from './state/progress';
 import { battleSeed, buildEnemyTeam, buildPlayerTeam } from './state/roster';
 
-type Screen = 'home' | 'battle' | 'result';
+type Screen = 'home' | 'prepare' | 'battle' | 'result';
 
 interface BattleSetup {
   player: Recruit[];
@@ -35,7 +36,12 @@ export function App() {
     saveProgress(progress);
   }, [progress]);
 
-  function startBattle() {
+  // Open the pre-battle briefing (no stamina spent until "Xuất Chiến").
+  function openPrepare() {
+    setScreen('prepare');
+  }
+
+  function launchBattle() {
     const now = Date.now();
     if (currentStamina(progress, now) < STAMINA_PER_BATTLE) return; // also guarded in UI
     const spent = spendStamina(progress, now, STAMINA_PER_BATTLE);
@@ -61,6 +67,21 @@ export function App() {
     setScreen('home');
   }
 
+  function setTeam(ids: string[]) {
+    setProgress((p) => ({ ...p, team: ids }));
+  }
+
+  if (screen === 'prepare') {
+    return (
+      <PrepareScreen
+        progress={progress}
+        onSetTeam={setTeam}
+        onLaunch={launchBattle}
+        onBack={() => setScreen('home')}
+      />
+    );
+  }
+
   if (screen === 'battle' && setup) {
     return (
       <BattleScreen
@@ -78,5 +99,7 @@ export function App() {
     );
   }
 
-  return <HomeScreen progress={progress} onBattle={startBattle} onReset={reset} />;
+  return (
+    <HomeScreen progress={progress} onBattle={openPrepare} onReset={reset} onSetTeam={setTeam} />
+  );
 }

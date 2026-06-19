@@ -25,6 +25,13 @@ export const KNOCKBACK_RANGED = 5;
 /** An attackRange at or below this counts as a melee attacker (knockback + feel). */
 export const MELEE_RANGE_MAX = 130;
 
+/**
+ * Movement is uniform: every unit advances at the same pace, so run speed is not a
+ * per-character stat — only attack speed (attackInterval) differentiates tempo.
+ * Slows scale this value down while active.
+ */
+export const MOVE_SPEED = 110; // world units per second
+
 /** Horizontal spacing between units at spawn (the starting file on each side). */
 export const UNIT_GAP = 50;
 

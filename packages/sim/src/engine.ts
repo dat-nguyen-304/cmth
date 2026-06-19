@@ -20,6 +20,7 @@ import {
   KNOCKBACK_RANGED,
   MAX_BATTLE_TICKS,
   MELEE_RANGE_MAX,
+  MOVE_SPEED,
   SEPARATION,
   UNIT_GAP,
 } from './constants.js';
@@ -59,7 +60,6 @@ function makeCombatant(uid: number, recruit: Recruit, side: Side, pos: { x: numb
     maxHp: scaleStat(b.maxHp, level),
     atk: scaleStat(b.atk, level),
     def: scaleStat(b.def, level),
-    spd: b.spd,
     attackRange: b.attackRange,
     attackInterval: b.attackInterval,
     attackTimer: 0,
@@ -110,8 +110,9 @@ function dist(a: Combatant, b: Combatant): number {
   return Math.abs(a.pos.x - b.pos.x);
 }
 
+/** Movement speed is uniform (MOVE_SPEED); only slows modify it. */
 function effectiveSpd(c: Combatant): number {
-  return c.slowTimer > 0 ? c.spd * c.slowFactor : c.spd;
+  return c.slowTimer > 0 ? MOVE_SPEED * c.slowFactor : MOVE_SPEED;
 }
 
 function effectiveDef(c: Combatant): number {

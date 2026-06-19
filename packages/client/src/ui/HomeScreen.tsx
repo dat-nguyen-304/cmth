@@ -6,13 +6,13 @@ import {
   playerExpToNext,
   staminaNextInMs,
   STAMINA_MAX,
-  STAMINA_PER_BATTLE,
   type PlayerProgress,
 } from '../state/progress';
 import { areaName, buildPlayerTeam } from '../state/roster';
 import { heroStats, SECT_ULT } from '../state/heroInfo';
 import { Modal } from './Modal';
 import { HubMap } from './HubMap';
+import { TeamSelect } from './TeamSelect';
 
 function hex(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
@@ -44,9 +44,10 @@ interface Props {
   progress: PlayerProgress;
   onBattle: () => void;
   onReset: () => void;
+  onSetTeam: (ids: string[]) => void;
 }
 
-export function HomeScreen({ progress, onBattle, onReset }: Props) {
+export function HomeScreen({ progress, onBattle, onReset, onSetTeam }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState<string | null>(null);
   const [hero, setHero] = useState<string | null>(null);
@@ -58,18 +59,16 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
 
   const stamina = currentStamina(progress, now);
   const nextMs = staminaNextInMs(progress, now);
-  const canFight = stamina >= STAMINA_PER_BATTLE;
   const team = buildPlayerTeam(progress);
   const playerPct = Math.min(100, (progress.playerExp / playerExpToNext(progress.playerLevel)) * 100);
   const lead = team[0];
   const leadColor = lead ? hex(SECTS[CHARACTERS[lead.defId]!.sect].color) : '#888';
   const battleLabel = `${areaName(progress.stage)} · Màn ${progress.stage}`;
 
-  // The "Khiêu Chiến" gate starts a battle; everything else opens a panel.
+  // The "Khiêu Chiến" gate opens the prepare screen; everything else opens a panel.
   const handleInteract = (id: string) => {
     if (id === 'battle') {
-      if (canFight) onBattle();
-      else setOpen('area');
+      onBattle();
       return;
     }
     setOpen(id);
@@ -81,10 +80,17 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
 
       {/* Top-left: Chưởng Môn badge */}
       <div className="absolute left-3 top-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-panel/90 px-3 py-2 backdrop-blur">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-b from-gold to-[#d99b27] text-xl text-[#2a1c00]">掌</div>
+        <div
+          className="grid place-items-center rounded-xl bg-gradient-to-b from-gold to-[#d99b27] text-[#2a1c00]"
+          style={{ width: 'clamp(40px,2.6vw,52px)', height: 'clamp(40px,2.6vw,52px)', fontSize: 'clamp(20px,1.45vw,27px)' }}
+        >
+          掌
+        </div>
         <div>
-          <div className="text-sm font-extrabold leading-tight">Lv {progress.playerLevel}</div>
-          <div className="mt-1 h-1.5 w-24 overflow-hidden rounded bg-black/40">
+          <div className="font-extrabold leading-tight" style={{ fontSize: 'clamp(13px,0.9vw,16px)' }}>
+            Lv {progress.playerLevel}
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded bg-black/40" style={{ width: 'clamp(96px,6.4vw,128px)' }}>
             <div className="h-full bg-gradient-to-r from-gold to-[#ffe08a]" style={{ width: `${playerPct}%` }} />
           </div>
         </div>
@@ -95,7 +101,7 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
         <Pill>💰 <b>{progress.gold}</b></Pill>
         <Pill dim title="Mở ở Phase 2">💎 <b>0</b></Pill>
         <Pill>⚡ <b>{stamina}</b><span className="text-muted">/{STAMINA_MAX}</span>
-          <span className="ml-1 text-[11px] text-muted">{nextMs > 0 ? mmss(nextMs) : 'đầy'}</span>
+          <span className="ml-1 text-[0.8em] text-muted">{nextMs > 0 ? mmss(nextMs) : 'đầy'}</span>
         </Pill>
       </div>
 
@@ -125,24 +131,7 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
       {/* ---------- Modals ---------- */}
       {open === 'team' && (
         <Modal title="Đội hình" onClose={() => setOpen(null)}>
-          <div className="grid grid-cols-3 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const r = team[i];
-              if (!r)
-                return (
-                  <div key={i} className="grid min-h-24 place-items-center rounded-xl border-2 border-dashed border-white/15 text-2xl text-white/30">+</div>
-                );
-              const def = CHARACTERS[r.defId]!;
-              return (
-                <button key={i} onClick={() => setHero(r.defId)} className="rounded-xl border-2 p-2 text-center hover:bg-white/5" style={{ borderColor: hex(SECTS[def.sect].color) }}>
-                  <div className="mb-1.5 h-10 w-full rounded-lg" style={{ background: hex(SECTS[def.sect].color) }} />
-                  <div className="truncate text-xs font-bold">{def.name}</div>
-                  <div className="text-xs text-muted">Lv {r.level}</div>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-xs text-muted">Chọn đội hình thủ công sẽ mở khi có hơn 6 tướng (Phase 2).</p>
+          <TeamSelect progress={progress} onSetTeam={onSetTeam} onInspect={setHero} />
         </Modal>
       )}
 
@@ -181,8 +170,8 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
                   </div>
                   {st === 'done' && <span className="text-green-400">✓ Đã qua</span>}
                   {st === 'current' && (
-                    <button onClick={onBattle} disabled={!canFight} className="rounded-xl bg-gradient-to-b from-gold to-[#d99b27] px-4 py-2 font-bold text-[#2a1c00] disabled:opacity-60 disabled:grayscale">
-                      Đánh −{STAMINA_PER_BATTLE}⚡
+                    <button onClick={onBattle} className="rounded-xl bg-gradient-to-b from-gold to-[#d99b27] px-4 py-2 font-bold text-[#2a1c00]">
+                      Chuẩn bị →
                     </button>
                   )}
                   {st === 'locked' && <span className="text-muted">🔒</span>}
@@ -220,19 +209,28 @@ export function HomeScreen({ progress, onBattle, onReset }: Props) {
 
 function Pill({ children, dim, title }: { children: ReactNode; dim?: boolean; title?: string }) {
   return (
-    <span title={title} className={`flex items-center gap-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm backdrop-blur ${dim ? 'opacity-60' : ''}`}>
+    <span
+      title={title}
+      className={`flex items-center gap-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 backdrop-blur ${dim ? 'opacity-60' : ''}`}
+      style={{ fontSize: 'clamp(13px,0.9vw,16px)' }}
+    >
       {children}
     </span>
   );
 }
 
 function Edge({ emoji, label, onClick, locked, big }: { emoji: string; label: string; onClick: () => void; locked?: boolean; big?: boolean }) {
+  const size = big ? 'clamp(58px,4vw,83px)' : 'clamp(50px,3.2vw,70px)';
   return (
     <button onClick={onClick} className="relative flex flex-col items-center justify-center gap-0.5 rounded-2xl border border-white/10 bg-panel/90 backdrop-blur hover:bg-white/10"
-      style={{ width: big ? 64 : 52, height: big ? 64 : 52 }}>
-      <span className={big ? 'text-3xl' : 'text-xl'}>{emoji}</span>
-      <span className="text-[9px] leading-none text-muted">{label}</span>
-      {locked && <span className="absolute -right-1 -top-1 rounded bg-black/70 px-1 text-[9px] text-gold">P2</span>}
+      style={{ width: size, height: size }}>
+      <span style={{ fontSize: big ? 'clamp(26px,2.1vw,40px)' : 'clamp(20px,1.6vw,32px)' }}>{emoji}</span>
+      <span className="leading-none text-muted" style={{ fontSize: 'clamp(9px,0.6vw,11px)' }}>{label}</span>
+      {locked && (
+        <span className="absolute -right-1 -top-1 rounded bg-black/70 px-1 text-gold" style={{ fontSize: 'clamp(8px,0.5vw,10px)' }}>
+          P2
+        </span>
+      )}
     </button>
   );
 }
@@ -242,7 +240,7 @@ function HeroDetail({ defId, level, exp, onClose }: { defId: string; level: numb
   const sect = SECTS[def.sect];
   const s = heroStats(defId, level);
   const ult = SECT_ULT[def.sect];
-  const Stat = ({ label, value }: { label: string; value: number }) => (
+  const Stat = ({ label, value }: { label: string; value: number | string }) => (
     <div className="rounded-lg bg-black/30 px-3 py-2">
       <div className="text-xs text-muted">{label}</div>
       <div className="font-bold">{value}</div>
@@ -262,7 +260,7 @@ function HeroDetail({ defId, level, exp, onClose }: { defId: string; level: numb
         <Stat label="HP" value={s.hp} />
         <Stat label="Công" value={s.atk} />
         <Stat label="Thủ" value={s.def} />
-        <Stat label="Tốc" value={s.spd} />
+        <Stat label="Tốc đánh" value={`${s.atkSpeed.toFixed(2)}/s`} />
       </div>
       <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
         <div className="text-xs uppercase tracking-wider text-muted">Chiêu cuối</div>

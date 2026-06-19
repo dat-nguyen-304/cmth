@@ -1,4 +1,4 @@
-import { ALL_CHARACTER_IDS, CHARACTERS } from '@cmth/sim';
+import { ALL_CHARACTER_IDS } from '@cmth/sim';
 
 /**
  * Phase 1 progression — stored locally (localStorage). This is intentionally
@@ -22,13 +22,26 @@ export interface PlayerProgress {
   stamina: number;
   staminaAt: number;
   chars: Record<string, CharProgress>;
+  /** Ordered ids of the characters that take the field (1–6). Index 0 is the
+   *  front line and engages first, so ordering is a real tactical choice. */
+  team: string[];
+}
+
+/** Max characters fielded at once (6v6 per the design). */
+export const TEAM_SIZE = 6;
+
+/** A character that gained one or more levels this battle. */
+export interface LevelUp {
+  defId: string;
+  from: number;
+  to: number;
 }
 
 export interface Rewards {
   gold: number;
   exp: number; // per-character exp
   playerExp: number;
-  levelUps: string[];
+  levelUps: LevelUp[];
   playerLeveledTo: number | null;
 }
 
@@ -61,12 +74,16 @@ export function defaultProgress(now: number = Date.now()): PlayerProgress {
     stamina: STAMINA_MAX,
     staminaAt: now,
     chars,
+    team: ALL_CHARACTER_IDS.slice(0, TEAM_SIZE),
   };
 }
 
 /** Fill in any fields/characters added since the save was written. */
 function migrate(p: Partial<PlayerProgress>): PlayerProgress {
   const base = defaultProgress();
+  const chars = { ...base.chars, ...p.chars };
+  // Keep only owned, unique ids; fall back to a default team if nothing valid.
+  const team = sanitizeTeam(p.team ?? base.team, chars);
   return {
     gold: p.gold ?? base.gold,
     stage: p.stage ?? base.stage,
@@ -74,8 +91,23 @@ function migrate(p: Partial<PlayerProgress>): PlayerProgress {
     playerExp: p.playerExp ?? base.playerExp,
     stamina: p.stamina ?? base.stamina,
     staminaAt: p.staminaAt ?? base.staminaAt,
-    chars: { ...base.chars, ...p.chars },
+    chars,
+    team: team.length > 0 ? team : Object.keys(chars).slice(0, TEAM_SIZE),
   };
+}
+
+/** Drop unknown/unowned ids, de-duplicate, and cap at TEAM_SIZE. */
+export function sanitizeTeam(ids: string[], chars: Record<string, CharProgress>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (chars[id] && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+    if (out.length >= TEAM_SIZE) break;
+  }
+  return out;
 }
 
 export function loadProgress(): PlayerProgress {
@@ -133,15 +165,22 @@ export function spendStamina(p: PlayerProgress, now: number, cost: number): Play
 
 // --- Rewards -------------------------------------------------------------------
 
+/** Gold / per-character exp / player exp granted for winning a stage. Pure, so the
+ *  prepare screen can preview it without applying anything. */
+export function winRewards(stage: number): { gold: number; exp: number; playerExp: number } {
+  return { gold: 50 + 10 * stage, exp: 40 + 8 * stage, playerExp: 30 + 4 * stage };
+}
+
 /** Apply battle rewards: gold, per-character exp, player exp, stage advance on win. */
 export function applyRewards(p: PlayerProgress, win: boolean): { next: PlayerProgress; rewards: Rewards } {
   const next: PlayerProgress = structuredClone(p);
   const rewards: Rewards = { gold: 0, exp: 0, playerExp: 0, levelUps: [], playerLeveledTo: null };
 
   if (win) {
-    rewards.gold = 50 + 10 * p.stage;
-    rewards.exp = 40 + 8 * p.stage;
-    rewards.playerExp = 30 + 4 * p.stage;
+    const w = winRewards(p.stage);
+    rewards.gold = w.gold;
+    rewards.exp = w.exp;
+    rewards.playerExp = w.playerExp;
     next.stage = p.stage + 1;
   } else {
     rewards.gold = 10;
@@ -154,14 +193,13 @@ export function applyRewards(p: PlayerProgress, win: boolean): { next: PlayerPro
   // Per-character exp + level ups.
   for (const id of Object.keys(next.chars)) {
     const cp = next.chars[id]!;
+    const before = cp.level;
     cp.exp += rewards.exp;
-    let leveled = false;
     while (cp.exp >= expToNext(cp.level)) {
       cp.exp -= expToNext(cp.level);
       cp.level += 1;
-      leveled = true;
     }
-    if (leveled) rewards.levelUps.push(CHARACTERS[id]!.name);
+    if (cp.level > before) rewards.levelUps.push({ defId: id, from: before, to: cp.level });
   }
 
   // Player (Chưởng Môn) exp + level ups.
