@@ -9,7 +9,14 @@ export {
   readyUlts,
   autoUltController,
 } from './engine.js';
-export { SECTS, CHARACTERS, ALL_CHARACTER_IDS, getCharacter } from './data.js';
+export {
+  SECTS,
+  CHARACTERS,
+  ALL_CHARACTER_IDS,
+  PLAYABLE_CHARACTER_IDS,
+  ENEMY_CHARACTER_IDS,
+  getCharacter,
+} from './data.js';
 export type { SectInfo } from './data.js';
 
 import type { BattleState } from './types.js';

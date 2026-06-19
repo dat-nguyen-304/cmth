@@ -2,6 +2,7 @@ import {
   createBattle,
   stepBattle,
   DT,
+  ENERGY_MAX,
   type BattleEvent,
   type BattleState,
   type Combatant,
@@ -37,13 +38,24 @@ export class BattleRunner {
     if (!this.pending.includes(uid)) this.pending.push(uid);
   }
 
+  /** Uids of living enemy (side 1) units whose ult is charged. */
+  private enemyReadyUlts(): number[] {
+    const out: number[] = [];
+    for (const c of this.state.combatants) {
+      if (c.side === 1 && c.alive && c.energy >= ENERGY_MAX) out.push(c.uid);
+    }
+    return out;
+  }
+
   /** Advance by real elapsed milliseconds. Returns events from any ticks that ran. */
   update(dtMs: number): BattleEvent[] {
     const events: BattleEvent[] = [];
     this.acc += Math.min(dtMs, 250) / 1000; // clamp to avoid spiral of death
     while (this.acc >= DT && !this.state.finished) {
       this.capturePrev();
-      const inputs = this.pending;
+      // Player ults come from portrait clicks; enemy AI greedily fires any ready ult
+      // so foe healers/tanks/casters actually use their kit.
+      const inputs = [...this.pending, ...this.enemyReadyUlts()];
       this.pending = [];
       events.push(...stepBattle(this.state, inputs));
       this.acc -= DT;
