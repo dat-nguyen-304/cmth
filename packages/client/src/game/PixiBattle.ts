@@ -16,7 +16,7 @@ const DEATH_FADE = 0.6; // seconds a corpse takes to fade out and vanish
 const LUNGE_T = 0.12; // seconds a melee lunge lasts
 const LUNGE_DIST = 14; // how far (px) a melee unit jabs toward its target
 const PROJECTILE_SPEED = 920; // px/s a ranged shot travels
-const ULT_FOCUS_T = 1.0; // seconds the ult spotlight (dim others + name) lasts
+const ULT_FOCUS_T = 1.5; // seconds the ult spotlight lasts (matches the sim pause)
 const ULT_VEIL_PEAK = 0.62; // max darkness of the spotlight veil
 
 interface UnitView {

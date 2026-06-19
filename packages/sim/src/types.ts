@@ -29,6 +29,7 @@ export interface CharacterDef {
 export interface Recruit {
   defId: string;
   level?: number; // defaults to 1
+  upgrade?: number; // gold-bought "tu luyện" tier (defaults to 0)
 }
 
 export interface Vec2 {

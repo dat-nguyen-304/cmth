@@ -1,4 +1,10 @@
-import { CHARACTERS, GROWTH_PER_LEVEL, MELEE_RANGE_MAX, type SectId } from '@cmth/sim';
+import {
+  CHARACTERS,
+  GROWTH_PER_LEVEL,
+  MELEE_RANGE_MAX,
+  UPGRADE_BONUS_PER_TIER,
+  type SectId,
+} from '@cmth/sim';
 
 /** Presentation-only ultimate names/descriptions per sect (the logic lives in the sim). */
 export const SECT_ULT: Record<SectId, { name: string; desc: string }> = {
@@ -33,10 +39,10 @@ export interface DisplayStats {
   ranged: boolean;
 }
 
-/** Stats a character would have at a given level (mirrors the sim's scaling). */
-export function heroStats(defId: string, level: number): DisplayStats {
+/** Stats a character would have at a given level + upgrade tier (mirrors the sim). */
+export function heroStats(defId: string, level: number, upgrade = 0): DisplayStats {
   const b = CHARACTERS[defId]!.base;
-  const f = 1 + GROWTH_PER_LEVEL * (level - 1);
+  const f = (1 + GROWTH_PER_LEVEL * (level - 1)) * (1 + UPGRADE_BONUS_PER_TIER * upgrade);
   return {
     hp: Math.round(b.maxHp * f),
     atk: Math.round(b.atk * f),

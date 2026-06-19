@@ -7,12 +7,16 @@ import { PLAYABLE_CHARACTER_IDS } from '@cmth/sim';
  */
 
 export interface CharProgress {
+  /** Bought with gold, capped by the tu luyện tier. Scales HP/ATK/DEF in combat. */
   level: number;
-  exp: number;
+  /** Tu luyện tier (0 = none): raises the level cap and adds a small power bonus. */
+  upgrade: number;
 }
 
 export interface PlayerProgress {
   gold: number;
+  /** Tinh Hoa — scarcer upgrade material (combines with gold for tu luyện). */
+  essence: number;
   stage: number;
   /** Account-level "Chưởng Môn" progression, shown in the hub header. */
   playerLevel: number;
@@ -30,18 +34,10 @@ export interface PlayerProgress {
 /** Max characters fielded at once (6v6 per the design). */
 export const TEAM_SIZE = 6;
 
-/** A character that gained one or more levels this battle. */
-export interface LevelUp {
-  defId: string;
-  from: number;
-  to: number;
-}
-
 export interface Rewards {
   gold: number;
-  exp: number; // per-character exp
+  essence: number;
   playerExp: number;
-  levelUps: LevelUp[];
   playerLeveledTo: number | null;
 }
 
@@ -53,8 +49,32 @@ export const STAMINA_PER_BATTLE = 6;
 /** One stamina point regenerated per this many ms (90s — tweak to taste). */
 export const STAMINA_REGEN_MS = 90_000;
 
-export function expToNext(level: number): number {
-  return 80 + level * 40;
+/** Each tu luyện tier raises a character's level cap by this many levels. */
+export const LEVELS_PER_TIER = 10;
+export function levelCap(upgrade: number): number {
+  return (upgrade + 1) * LEVELS_PER_TIER;
+}
+/** Gold to raise a character from `level` to `level + 1`. */
+export function levelCost(level: number): number {
+  return 40 + 20 * level;
+}
+
+/** Tinh Hoa earned per win (scarce vs gold), with a bonus on boss stages. */
+export const ESSENCE_PER_WIN = 2;
+export const ESSENCE_BOSS_BONUS = 6;
+/** Boss stages (every 5th) — mirrors the encounter builder. */
+export function isBossStage(stage: number): boolean {
+  return stage % 5 === 0;
+}
+
+/** Tu luyện: cap + cost (gold AND Tinh Hoa) to go from the current tier to the next.
+ *  Gold is plentiful so it stays cheap; Tinh Hoa is the real gate. */
+export const MAX_UPGRADE = 10;
+export function upgradeCost(tier: number): number {
+  return 80 * (tier + 1);
+}
+export function upgradeEssenceCost(tier: number): number {
+  return 2 + tier; // 2,3,4,… — a few wins per early tier
 }
 
 export function playerExpToNext(level: number): number {
@@ -65,9 +85,10 @@ export function playerExpToNext(level: number): number {
 
 export function defaultProgress(now: number = Date.now()): PlayerProgress {
   const chars: Record<string, CharProgress> = {};
-  for (const id of PLAYABLE_CHARACTER_IDS) chars[id] = { level: 1, exp: 0 };
+  for (const id of PLAYABLE_CHARACTER_IDS) chars[id] = { level: 1, upgrade: 0 };
   return {
     gold: 0,
+    essence: 0,
     stage: 1,
     playerLevel: 1,
     playerExp: 0,
@@ -81,11 +102,17 @@ export function defaultProgress(now: number = Date.now()): PlayerProgress {
 /** Fill in any fields/characters added since the save was written. */
 function migrate(p: Partial<PlayerProgress>): PlayerProgress {
   const base = defaultProgress();
-  const chars = { ...base.chars, ...p.chars };
+  // Merge per-character so fields added later (e.g. `upgrade`) get defaults even when
+  // an older save only stored {level, exp}.
+  const chars: Record<string, CharProgress> = {};
+  for (const id of Object.keys(base.chars)) {
+    chars[id] = { ...base.chars[id]!, ...(p.chars?.[id] ?? {}) };
+  }
   // Keep only owned, unique ids; fall back to a default team if nothing valid.
   const team = sanitizeTeam(p.team ?? base.team, chars);
   return {
     gold: p.gold ?? base.gold,
+    essence: p.essence ?? base.essence,
     stage: p.stage ?? base.stage,
     playerLevel: p.playerLevel ?? base.playerLevel,
     playerExp: p.playerExp ?? base.playerExp,
@@ -134,6 +161,43 @@ export function resetProgress(): PlayerProgress {
   return p;
 }
 
+/**
+ * Spend gold to raise a character's level by one (up to the tu luyện cap).
+ * Returns updated progress, or null if at the cap or short on gold.
+ */
+export function levelUpChar(p: PlayerProgress, defId: string): PlayerProgress | null {
+  const cp = p.chars[defId];
+  if (!cp) return null;
+  if (cp.level >= levelCap(cp.upgrade ?? 0)) return null; // need tu luyện to raise the cap
+  const cost = levelCost(cp.level);
+  if (p.gold < cost) return null;
+  const next = structuredClone(p);
+  next.gold -= cost;
+  next.chars[defId]!.level = cp.level + 1;
+  return next;
+}
+
+/**
+ * Tu luyện: spend gold + Tinh Hoa to raise the tier by one, which lifts the level
+ * cap (and adds a power bonus). Only allowed once the character has hit its current
+ * cap. Returns null if maxed, not at cap, or short on either resource.
+ */
+export function upgradeChar(p: PlayerProgress, defId: string): PlayerProgress | null {
+  const cp = p.chars[defId];
+  if (!cp) return null;
+  const tier = cp.upgrade ?? 0; // tolerate older saves without the field
+  if (tier >= MAX_UPGRADE) return null;
+  if (cp.level < levelCap(tier)) return null; // must reach the current cap first
+  const gold = upgradeCost(tier);
+  const essence = upgradeEssenceCost(tier);
+  if (p.gold < gold || (p.essence ?? 0) < essence) return null;
+  const next = structuredClone(p);
+  next.gold -= gold;
+  next.essence = (next.essence ?? 0) - essence;
+  next.chars[defId]!.upgrade = tier + 1;
+  return next;
+}
+
 // --- Stamina (derived from the anchor; no per-second writes) --------------------
 
 /** Live stamina at `now`, regenerated from the stored anchor. */
@@ -165,42 +229,38 @@ export function spendStamina(p: PlayerProgress, now: number, cost: number): Play
 
 // --- Rewards -------------------------------------------------------------------
 
-/** Gold / per-character exp / player exp granted for winning a stage. Pure, so the
- *  prepare screen can preview it without applying anything. */
-export function winRewards(stage: number): { gold: number; exp: number; playerExp: number } {
-  return { gold: 50 + 10 * stage, exp: 40 + 8 * stage, playerExp: 30 + 4 * stage };
+/** Gold / Tinh Hoa / Chưởng Môn exp granted for winning a stage. Pure, so the
+ *  prepare screen can preview it without applying anything. Characters level up by
+ *  spending gold, not from battle exp. */
+export function winRewards(
+  stage: number,
+): { gold: number; essence: number; playerExp: number } {
+  return {
+    gold: 50 + 10 * stage,
+    essence: ESSENCE_PER_WIN + (isBossStage(stage) ? ESSENCE_BOSS_BONUS : 0),
+    playerExp: 30 + 4 * stage,
+  };
 }
 
-/** Apply battle rewards: gold, per-character exp, player exp, stage advance on win. */
+/** Apply battle rewards: gold, Tinh Hoa, Chưởng Môn exp, stage advance on win. */
 export function applyRewards(p: PlayerProgress, win: boolean): { next: PlayerProgress; rewards: Rewards } {
   const next: PlayerProgress = structuredClone(p);
-  const rewards: Rewards = { gold: 0, exp: 0, playerExp: 0, levelUps: [], playerLeveledTo: null };
+  const rewards: Rewards = { gold: 0, essence: 0, playerExp: 0, playerLeveledTo: null };
 
   if (win) {
     const w = winRewards(p.stage);
     rewards.gold = w.gold;
-    rewards.exp = w.exp;
+    rewards.essence = w.essence;
     rewards.playerExp = w.playerExp;
     next.stage = p.stage + 1;
   } else {
     rewards.gold = 10;
-    rewards.exp = 15;
+    rewards.essence = 0;
     rewards.playerExp = 10;
   }
 
   next.gold += rewards.gold;
-
-  // Per-character exp + level ups.
-  for (const id of Object.keys(next.chars)) {
-    const cp = next.chars[id]!;
-    const before = cp.level;
-    cp.exp += rewards.exp;
-    while (cp.exp >= expToNext(cp.level)) {
-      cp.exp -= expToNext(cp.level);
-      cp.level += 1;
-    }
-    if (cp.level > before) rewards.levelUps.push({ defId: id, from: before, to: cp.level });
-  }
+  next.essence = (next.essence ?? 0) + rewards.essence;
 
   // Player (Chưởng Môn) exp + level ups.
   next.playerExp += rewards.playerExp;

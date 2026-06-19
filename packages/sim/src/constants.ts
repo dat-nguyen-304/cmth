@@ -50,3 +50,7 @@ export const ARENA_HEIGHT = 520;
 
 /** Per-level stat growth: stat = base * (1 + GROWTH_PER_LEVEL * (level - 1)). */
 export const GROWTH_PER_LEVEL = 0.12;
+
+/** Each gold-bought "tu luyện" tier adds this fraction to a character's HP/ATK/DEF
+ *  (which also strengthens ults, since ults scale off those stats). */
+export const UPGRADE_BONUS_PER_TIER = 0.06;

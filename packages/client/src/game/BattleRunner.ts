@@ -10,6 +10,9 @@ import {
   type Side,
 } from '@cmth/sim';
 
+/** Seconds the sim freezes after an ult fires, so the player can watch the cast. */
+const ULT_PAUSE_S = 1.5;
+
 /**
  * Drives the deterministic sim at a fixed timestep from real (variable) frame time,
  * and exposes interpolated positions so rendering stays smooth between ticks.
@@ -20,6 +23,7 @@ export class BattleRunner {
   private acc = 0;
   private prev = new Map<number, { x: number; y: number }>();
   private pending: number[] = [];
+  private pauseRemaining = 0; // sim is frozen while > 0 (post-ult dramatic pause)
 
   constructor(teamA: Recruit[], teamB: Recruit[], seed: number) {
     this.state = createBattle(teamA, teamB, seed);
@@ -50,15 +54,29 @@ export class BattleRunner {
   /** Advance by real elapsed milliseconds. Returns events from any ticks that ran. */
   update(dtMs: number): BattleEvent[] {
     const events: BattleEvent[] = [];
-    this.acc += Math.min(dtMs, 250) / 1000; // clamp to avoid spiral of death
+    const dt = Math.min(dtMs, 250) / 1000; // clamp to avoid spiral of death
+
+    // Frozen mid-ult: let the cast animation play, advance no sim time.
+    if (this.pauseRemaining > 0) {
+      this.pauseRemaining -= dt;
+      return events;
+    }
+
+    this.acc += dt;
     while (this.acc >= DT && !this.state.finished) {
       this.capturePrev();
       // Player ults come from portrait clicks; enemy AI greedily fires any ready ult
       // so foe healers/tanks/casters actually use their kit.
       const inputs = [...this.pending, ...this.enemyReadyUlts()];
       this.pending = [];
-      events.push(...stepBattle(this.state, inputs));
+      const tick = stepBattle(this.state, inputs);
+      events.push(...tick);
       this.acc -= DT;
+      // An ult fired this tick → freeze so the player can watch it, then resume.
+      if (tick.some((e) => e.type === 'ult')) {
+        this.pauseRemaining = ULT_PAUSE_S;
+        break;
+      }
     }
     return events;
   }

@@ -72,7 +72,7 @@ export function PrepareScreen({ progress, onSetTeam, onLaunch, onBack }: Props) 
           <h3 className="mb-3 font-bold text-gold">🎁 Phần thưởng khi thắng</h3>
           <div className="space-y-2 text-[15px]">
             <Reward icon="💰" label="Vàng" value={`+${reward.gold}`} />
-            <Reward icon="✨" label="EXP mỗi tướng" value={`+${reward.exp}`} />
+            <Reward icon="🔮" label="Tinh Hoa" value={`+${reward.essence}`} />
             <Reward icon="掌" label="Chưởng Môn EXP" value={`+${reward.playerExp}`} />
           </div>
           <p className="mt-3 rounded-lg bg-black/20 px-3 py-2 text-xs text-muted">

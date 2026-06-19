@@ -12,6 +12,8 @@ import {
   saveProgress,
   spendStamina,
   STAMINA_PER_BATTLE,
+  levelUpChar,
+  upgradeChar,
   type PlayerProgress,
   type Rewards,
 } from './state/progress';
@@ -71,6 +73,24 @@ export function App() {
     setProgress((p) => ({ ...p, team: ids }));
   }
 
+  // Dev/test helper: jump to stage 10 and top up resources for experimenting.
+  function cheat() {
+    setProgress((p) => ({
+      ...p,
+      gold: p.gold + 10000,
+      essence: (p.essence ?? 0) + 100,
+      stage: Math.max(p.stage, 10),
+    }));
+  }
+
+  function levelUp(defId: string) {
+    setProgress((p) => levelUpChar(p, defId) ?? p);
+  }
+
+  function upgrade(defId: string) {
+    setProgress((p) => upgradeChar(p, defId) ?? p);
+  }
+
   if (screen === 'prepare') {
     return (
       <PrepareScreen
@@ -100,6 +120,14 @@ export function App() {
   }
 
   return (
-    <HomeScreen progress={progress} onBattle={openPrepare} onReset={reset} onSetTeam={setTeam} />
+    <HomeScreen
+      progress={progress}
+      onBattle={openPrepare}
+      onReset={reset}
+      onSetTeam={setTeam}
+      onLevelUp={levelUp}
+      onUpgrade={upgrade}
+      onCheat={cheat}
+    />
   );
 }

@@ -8,7 +8,11 @@ import { sanitizeTeam, TEAM_SIZE, type PlayerProgress } from './progress';
 export function buildPlayerTeam(p: PlayerProgress): Recruit[] {
   let ids = sanitizeTeam(p.team ?? [], p.chars);
   if (ids.length === 0) ids = Object.keys(p.chars).slice(0, TEAM_SIZE);
-  return ids.map((defId) => ({ defId, level: p.chars[defId]!.level }));
+  return ids.map((defId) => ({
+    defId,
+    level: p.chars[defId]!.level,
+    upgrade: p.chars[defId]!.upgrade,
+  }));
 }
 
 // Enemy mobs grouped by battlefield role. Pools rotate by area so different regions

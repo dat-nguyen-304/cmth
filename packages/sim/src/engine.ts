@@ -23,6 +23,7 @@ import {
   MOVE_SPEED,
   SEPARATION,
   UNIT_GAP,
+  UPGRADE_BONUS_PER_TIER,
 } from './constants.js';
 import { getCharacter } from './data.js';
 import { nextRange, toSeed } from './rng.js';
@@ -47,6 +48,9 @@ function makeCombatant(uid: number, recruit: Recruit, side: Side, pos: { x: numb
   const def = getCharacter(recruit.defId);
   const level = recruit.level ?? 1;
   const b = def.base;
+  // "Tu luyện": gold-bought upgrade tiers scale HP/ATK/DEF on top of level growth.
+  const up = 1 + UPGRADE_BONUS_PER_TIER * (recruit.upgrade ?? 0);
+  const maxHp = scaleStat(b.maxHp, level) * up;
   return {
     uid,
     defId: def.id,
@@ -56,10 +60,10 @@ function makeCombatant(uid: number, recruit: Recruit, side: Side, pos: { x: numb
     level,
     pos: { x: pos.x, y: pos.y },
     facing: side === 0 ? 1 : -1,
-    hp: scaleStat(b.maxHp, level),
-    maxHp: scaleStat(b.maxHp, level),
-    atk: scaleStat(b.atk, level),
-    def: scaleStat(b.def, level),
+    hp: maxHp,
+    maxHp,
+    atk: scaleStat(b.atk, level) * up,
+    def: scaleStat(b.def, level) * up,
     attackRange: b.attackRange,
     attackInterval: b.attackInterval,
     attackTimer: 0,
